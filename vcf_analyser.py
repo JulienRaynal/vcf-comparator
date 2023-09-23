@@ -1,15 +1,20 @@
+import itertools
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib_venn import venn3
+from typing import List, Dict
 
 def open_file(path: str) -> pd.DataFrame:
     """
     Opens a csv file created by the data_grepper.sh script and adds the correct headers
     """
-    file: pd.DataFrame = pd.read_csv(path, sep="\t", names=["ID", "REF", "ALT", "SVTYPE", "SVLEN", "END", "AF", "PASSAGE", "CULTURE", "DR", "DV"])
+    #file: pd.DataFrame = pd.read_csv(path, sep="\t", names=["ID", "REF", "ALT", "SVTYPE", "SVLEN", "END", "AF", "PASSAGE", "CULTURE", "DR", "DV"])
+    file: pd.DataFrame = pd.read_csv(path, sep="\t")
     file[["PASSAGE"]] = file[["PASSAGE"]].fillna(method="ffill")
     return file
 
 
-def merge_formater(df: pd.DataFrame):
+def merge_formater(df: pd.DataFrame) -> pd.DataFrame:
     """
     Creates a dataframe in the format of the merger
     ID  |   REF |   ... |   PASSAGE 1   |   PASSAGE 2   |   PASSAGE 3 ...
@@ -24,13 +29,11 @@ def merge_formater(df: pd.DataFrame):
     for passage in passages:
         passage_df_list.append(df.loc[df["PASSAGE"] == passage])
 
-    # TODO: change the column passage from names like P15 to TRUE if name of FALSE if not 
-# TODO: logique pour la boucle
     merge_df = passage_df_list[0].rename(columns={"PASSAGE": passage_df_list[0]["PASSAGE"].unique()[0]})
     for i in range(1, len(passage_df_list)):
         # Rename the PASSAGE column to the passage value
         passage_df_list[i] = passage_df_list[i].rename(columns={"PASSAGE": passage_df_list[i]["PASSAGE"].unique()[0]})
-        merge_df: pd.DataFrame = merge_df.copy().merge(passage_df_list[i], how="outer", on=["ID", "END", "ALT"])
+        merge_df: pd.DataFrame = merge_df.copy().merge(passage_df_list[i], how="outer", on=["POS", "END", "ALT"])
         # delete all the duplicated _y columns
         merge_df = merge_df.loc[:, ~merge_df.columns.str.endswith("_y")]
         # remove _x from the columns
@@ -47,24 +50,52 @@ def merge_formater(df: pd.DataFrame):
 
     merge_df = merge_df.drop_duplicates()
     return merge_df
-    ## TODO: verifier si trim à 1000, sinon check si même mut dasn le on
-    #merge_df: pd.DataFrame = pd.merge(passage_df_list[0], passage_df_list[1], how="left", on=["ID", "END"])
-    ## Rename the left join passags to the passage names
-    #merge_df = merge_df.rename(columns={"PASSAGE_x": merge_df["PASSAGE_x"].unique()[0]})
-    #merge_df = merge_df.rename(columns={"PASSAGE_y": merge_df["PASSAGE_y"].unique()[0]})
-    ## delete all the duplicated _y columns
-    #merge_df = merge_df.loc[:, ~merge_df.columns.str.endswith("_y")]
-    ## remove _x from the columns
-    #merge_df.columns = merge_df.columns.str.rstrip("_x")
-    ## Move the Passage columns to the left
-    #passage_column_names: list = merge_df.filter(regex=("P[0-9]{2}")).columns.values.tolist()
-    #print(passage_column_names)
-    #merge_df = merge_df[[c for c in merge_df if c not in passage_column_names] + passage_column_names]
-    #print(merge_df.head)
+
+def all_combinations(al: List[str]) -> List[List[str]]:
+    """
+    Makes all possible combinations of size 1 to n where n is the total number of element in the given list
+    """
+    return itertools.chain.from_iterable(
+        itertools.combinations(al, i+1)
+        for i in range(len(al))
+    ) 
+
+def make_venn_diag_3(df: pd.DataFrame) -> None:
+    # TODO: trouver un moyen de le faire dynamiquement
+    df: pd.DataFrame = df.copy()
+    columns_to_compare: List[str] = df.filter(regex=("P[0-9]{2}")).columns.values.tolist()
+    # generate a list
+    comp_list: List[List[str]] = all_combinations(columns_to_compare)
+    value_dict: Dict[List[str], int] = {}
+    for c in comp_list:
+        var_0: bool = True if (columns_to_compare[0] in c) else False
+        var_1: bool = True if (columns_to_compare[1] in c) else False
+        var_2: bool = True if (columns_to_compare[2] in c) else False
+
+        number_of_rows: int = df.loc[
+            (df[columns_to_compare[0]] == var_0) &
+            (df[columns_to_compare[1]] == var_1) &
+            (df[columns_to_compare[2]] == var_2)
+        ]
+
+        value_dict[",".join(c)] = number_of_rows.shape[0]
+
+    venn3(subsets=(value_dict[columns_to_compare[0]], 
+                   value_dict[columns_to_compare[1]],
+                   value_dict[columns_to_compare[0]+','+columns_to_compare[1]], 
+                   value_dict[columns_to_compare[2]], 
+                   value_dict[columns_to_compare[0]+','+columns_to_compare[2]],
+                   value_dict[columns_to_compare[1]+','+columns_to_compare[2]],
+                   value_dict[columns_to_compare[0]+','+columns_to_compare[1]+','+columns_to_compare[2]]),
+          set_labels=(columns_to_compare[0],
+                      columns_to_compare[1],
+                      columns_to_compare[2]))
+    plt.show()
+
 
     
-file: pd.DataFrame = open_file("oscur.txt")
-#test = file[file["PASSAGE"] == "P30"].drop_duplicates()
-#print(test.shape)
+
+    
+file: pd.DataFrame = open_file("vcf_merge.csv")
 file2 = merge_formater(file)
-print(file2.loc[(file2["P30"] == False) & (file2["P15"] == True) & (file2["P50"] == True)].shape)
+make_venn_diag_3(file2)
