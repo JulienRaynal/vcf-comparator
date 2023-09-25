@@ -1,11 +1,12 @@
 $(echo "" > vcf_merge.csv)
 
-$(echo -e "CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tSVTYPE\tSVLEN\tEND\tSUPPORT\tCOVERAGE\tAF\tPASSAGE\tCULTURE\tDR\tDV" >> vcf_merge.csv)
+$(echo -e "CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tSVTYPE\tSVLEN\tEND\tSUPPORT\tCOVERAGE\tAF\tPASSAGE\tCULTURE\tDR\tDV\tFILE" >> vcf_merge.csv)
 FILENAMES=()
 COUNTER=0
 # For each VCF file in the folder: save the VCF file name
 for FILE in ./*.vcf; do 
 	FILENAMES[${#FILENAMES[@]}]=$FILE;
+	echo $FILE
 done;
 IFS=$'\n' SORTED=($(sort <<<"${FILENAMES[*]}")); unset IFS;
 
@@ -33,9 +34,10 @@ for ((idx=0; idx<=${#SORTED[@]} - 1; ++idx)); do
 	# Get the passages and the cultures
 	PASSAGE=$(echo ${SORTED[idx]} | grep -oE P[0-9].)
 	CULTURE=$(echo ${SORTED[idx]} | grep -oE C[0-9]*)
+	FNAME=$(echo ${SORTED[idx]} | grep -oE [^.\/]*[a-zA-Z][^.\/]*)
 
 	# Append to a file all the data we have saved
-	FILE=$(paste <(printf %s "$CHR") <(printf %s "$POS") <(printf %s "$ID") <(printf %s "$REF") <(printf %s "$ALT") <(printf %s "$QUAL") <(printf %s "$FILTER") <(printf %s "$SVTYPE") <(printf %s "$SVLEN") <(printf %s "$END") <(printf %s "$SUPPORT") <(printf %s "$COVERAGE") <(printf %s "$AF") <(printf %s "$PASSAGE") <(printf %s "$CULTURE") <(printf %s "$DR") <(printf %s "$DV"))
+	FILE=$(paste <(printf %s "$CHR") <(printf %s "$POS") <(printf %s "$ID") <(printf %s "$REF") <(printf %s "$ALT") <(printf %s "$QUAL") <(printf %s "$FILTER") <(printf %s "$SVTYPE") <(printf %s "$SVLEN") <(printf %s "$END") <(printf %s "$SUPPORT") <(printf %s "$COVERAGE") <(printf %s "$AF") <(printf %s "$PASSAGE") <(printf %s "$CULTURE") <(printf %s "$DR") <(printf %s "$DV") <(printf %s "$FNAME"))
 	$(echo "$FILE" >> vcf_merge.csv)	
 done
 
