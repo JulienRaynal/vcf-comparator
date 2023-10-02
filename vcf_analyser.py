@@ -1,3 +1,4 @@
+import numpy as np
 import itertools
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,6 +12,8 @@ def open_file(path: str) -> pd.DataFrame:
     #file: pd.DataFrame = pd.read_csv(path, sep="\t", names=["ID", "REF", "ALT", "SVTYPE", "SVLEN", "END", "AF", "PASSAGE", "CULTURE", "DR", "DV"])
     file: pd.DataFrame = pd.read_csv(path, sep="\t")
     file[["PASSAGE"]] = file[["PASSAGE"]].fillna(method="ffill")
+    if "FILE" in file:
+        file[["FILE"]] = file[["FILE"]].fillna(method="ffill")
     return file
 
 
@@ -93,9 +96,50 @@ def make_venn_diag_3(df: pd.DataFrame) -> None:
     plt.show()
 
 
-    
+def merge_variant_callerscompare_variant_caller(df: pd.DataFrame) -> pd.DataFrame:
+    df: pd.DataFrame = df.copy()
 
-    
-file: pd.DataFrame = open_file("vcf_merge.csv")
+    # Get a list of unique passages names in the dataframe
+    variant_callers: List[str] = df["FILE"].unique()
+
+    # Creates a dataframe in a list containing each unique passage
+    variant_caller_df_list: List[pd.DataFrame] = []
+    for vc in variant_callers:
+        variant_caller_df_list.append(df.loc[df["FILE"] == vc])
+
+    merge_df = variant_caller_df_list[0].rename(columns={"FILE": variant_caller_df_list[0]["FILE"].unique()[0]})
+    for i in range(1, len(variant_caller_df_list)):
+        # Rename the PASSAGE column to the passage value
+        variant_caller_df_list[i] = variant_caller_df_list[i].rename(columns={"FILE": variant_caller_df_list[i]["FILE"].unique()[0]})
+        merge_df: pd.DataFrame = merge_df.copy().merge(variant_caller_df_list[i], how="outer", on=["POS", "END", "ALT"])
+        # delete all the duplicated _y columns
+        merge_df = merge_df.loc[:, ~merge_df.columns.str.endswith("_y")]
+        # remove _x from the columns
+        merge_df.columns = merge_df.columns.str.rstrip("_x")
+        # Move the passage column to the left
+        passage_column_names: list = merge_df.filter(regex=("P[0-9]{2}")).columns.values.tolist()
+        merge_df = merge_df[[c for c in merge_df if c not in passage_column_names] + passage_column_names]
+
+    # Fill the columns with boolean values
+    for vc in variant_callers:
+        merge_df[vc] = merge_df[vc].replace({vc: True})
+        merge_df[vc] = merge_df[vc].fillna(False)
+
+
+    merge_df = merge_df.drop_duplicates()
+    return merge_df
+
+def simplify(df: pd.DataFrame):
+    df = df[["CHROM", "POS", "SVTYPE", "SVLEN", "DR", "DV"]]
+
+
+
+file: pd.DataFrame = open_file("variant_callers.vcf")
 file2 = merge_formater(file)
-make_venn_diag_3(file2)
+simplify(file2)
+#file2.to_csv("code_output.csv", sep="\t", encoding="utf-8")
+#make_venn_diag_3(file2)
+
+#file2 = merge_variant_callerscompare_variant_caller(file)
+#print(file2.loc[(file2["nanovar"] == True) & (file2["cuteSV"] == True)].shape)
+print(file2.loc[file2["ID"] == 22620])
