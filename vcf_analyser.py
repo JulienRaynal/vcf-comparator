@@ -37,6 +37,15 @@ def merge_formater(df: pd.DataFrame) -> pd.DataFrame:
         # Rename the PASSAGE column to the passage value
         passage_df_list[i] = passage_df_list[i].rename(columns={"PASSAGE": passage_df_list[i]["PASSAGE"].unique()[0]})
         merge_df: pd.DataFrame = merge_df.copy().merge(passage_df_list[i], how="outer", on=["POS", "END", "ALT"])
+
+        # Recreate information to not have NA columns
+        nan_cols: list = merge_df.loc[:, merge_df.isna().any()].columns
+        nan_cols = [col for col in nan_cols if col.endswith("_x")]
+        for col in nan_cols:
+            merge_df[col].fillna(merge_df[col.replace("_x", "_y")], inplace=True)
+
+
+
         # delete all the duplicated _y columns
         merge_df = merge_df.loc[:, ~merge_df.columns.str.endswith("_y")]
         # remove _x from the columns
@@ -50,9 +59,6 @@ def merge_formater(df: pd.DataFrame) -> pd.DataFrame:
         merge_df[passage] = merge_df[passage].replace({passage: True})
         merge_df[passage] = merge_df[passage].fillna(False)
 
-
-    merge_df = merge_df.drop_duplicates()
-    return merge_df
 
 def all_combinations(al: List[str]) -> List[List[str]]:
     """
@@ -112,6 +118,16 @@ def merge_variant_callerscompare_variant_caller(df: pd.DataFrame) -> pd.DataFram
         # Rename the PASSAGE column to the passage value
         variant_caller_df_list[i] = variant_caller_df_list[i].rename(columns={"FILE": variant_caller_df_list[i]["FILE"].unique()[0]})
         merge_df: pd.DataFrame = merge_df.copy().merge(variant_caller_df_list[i], how="outer", on=["POS", "END", "ALT"])
+
+
+        # Recreate information to not have NA columns
+        nan_cols: list = merge_df.loc[:, merge_df.isna().any()].columns
+        nan_cols = [col for col in nan_cols if col.endswith("_x")]
+        for col in nan_cols:
+            merge_df[col].fillna(merge_df[col.replace("_x", "_y")], inplace=True)
+
+
+
         # delete all the duplicated _y columns
         merge_df = merge_df.loc[:, ~merge_df.columns.str.endswith("_y")]
         # remove _x from the columns
@@ -130,11 +146,28 @@ def merge_variant_callerscompare_variant_caller(df: pd.DataFrame) -> pd.DataFram
     return merge_df
 
 def simplify(df: pd.DataFrame):
-    df = df[["CHROM", "POS", "SVTYPE", "SVLEN", "DR", "DV"]]
+    df = df[["CHROM", "POS", "SVTYPE", "SVLEN", "DR" + "DV", "DV", "AF"]]
+    new_df = pd.DataFrame()
+    if "CHROM" in df.columns:
+        new_df["CHROM"] = df["CHROM"]
+    if "POS" in df.columns:
+        new_df["POS"] = df["POS"]
+    if "SVTYPE" in df.columns:
+        new_df["SVTYPE"] = df["SVTYPE"]
+    if "SVLEN" in df.columns:
+        new_df["SVLEN"] = df["SVLEN"]
+    if "DR" in df.columns and "DV" in df.columns:
+        new_df["LECTURE TOT"] = df["DR"] + df["DV"]
+    if "DV" in df.columns:
+        new_df["LECTURE SUP"] = df["DV"]
+    if "AF" in df.columns:
+        new_df["AF"] = df["AF"]
+
+    new_df.to_csv("simple.csv", sep="\t", encoding="utf-8")
 
 
 
-file: pd.DataFrame = open_file("variant_callers.vcf")
+file: pd.DataFrame = open_file("vcf_merge.csv")
 file2 = merge_formater(file)
 simplify(file2)
 #file2.to_csv("code_output.csv", sep="\t", encoding="utf-8")
@@ -142,4 +175,4 @@ simplify(file2)
 
 #file2 = merge_variant_callerscompare_variant_caller(file)
 #print(file2.loc[(file2["nanovar"] == True) & (file2["cuteSV"] == True)].shape)
-print(file2.loc[file2["ID"] == 22620])
+#print(file2.loc[file2["ID"] == 22620])
